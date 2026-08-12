@@ -270,7 +270,7 @@ export function BlockersPage() {
             <span className="count">{formatNumber(blockedResults.length, lang)}</span>
             <span className="label">
               {blockedResults.length === 1 ? dict.blockers.accountSingular : dict.blockers.accountPlural}{' '}
-              {dict.blockers.excommunicatedYou}
+              {blockedResults.length === 1 ? dict.blockers.excommunicatedYouOne : dict.blockers.excommunicatedYouMany}
               {status === 'done'
                 ? t('blockers.outOfChecked', { total: formatNumber(results.length, lang) })
                 : dict.blockers.soFar}

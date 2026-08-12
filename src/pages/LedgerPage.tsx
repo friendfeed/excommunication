@@ -74,7 +74,9 @@ export function LedgerPage() {
             <span className="count">{formatNumber(entries.length, lang)}</span>
             <span className="label">
               {entries.length === 1 ? dict.ledger.accountSingular : dict.ledger.accountPlural}{' '}
-              {t('ledger.excommunicatedBy', { handle: resolvedHandle })}
+              {t(entries.length === 1 ? 'ledger.excommunicatedByOne' : 'ledger.excommunicatedByMany', {
+                handle: resolvedHandle,
+              })}
             </span>
           </div>
 
