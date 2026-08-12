@@ -2,24 +2,15 @@ import { useState, useCallback, useRef } from 'react';
 import { BlockScanner, DEFAULT_NETWORK_OPTIONS } from '../services/BlockScanner';
 import { ScanPanel } from '../components/ScanPanel';
 import { ResultCard } from '../components/ResultCard';
+import { useLanguage } from '../i18n/LanguageContext';
+import { formatNumber, formatScaleLabel, localizeErrorMessage } from '../i18n/format';
 import type { CandidateResult, NetworkOptions, ScanProgress, SkipMetric } from '../types';
 
 type Status = 'idle' | 'scanning' | 'done' | 'error';
 type DepthKey = 'depth1' | 'depth2' | 'depth3';
 
-const SKIP_METRIC_LABELS: Record<SkipMetric, string> = {
-  followers: 'Followers',
-  following: 'Following',
-  both: 'Either',
-};
-
-const DEPTH_LABELS: Record<DepthKey, string> = {
-  depth1: 'Depth 1 · direct circle',
-  depth2: 'Depth 2 · circle of the circle',
-  depth3: 'Depth 3 · the far congregation',
-};
-
 export function BlockersPage() {
+  const { lang, dict, t } = useLanguage();
   const [handle, setHandle] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [progress, setProgress] = useState<ScanProgress | null>(null);
@@ -30,6 +21,18 @@ export function BlockersPage() {
     String(DEFAULT_NETWORK_OPTIONS.skipLargeAccounts.maxCount)
   );
   const scannerRef = useRef(new BlockScanner());
+
+  const SKIP_METRIC_LABELS: Record<SkipMetric, string> = {
+    followers: dict.blockers.followers,
+    following: dict.blockers.following,
+    both: dict.blockers.skipEither,
+  };
+
+  const DEPTH_LABELS: Record<DepthKey, string> = {
+    depth1: dict.blockers.depth1,
+    depth2: dict.blockers.depth2,
+    depth3: dict.blockers.depth3,
+  };
 
   const toggleOption = useCallback((depth: DepthKey, key: 'followers' | 'following') => {
     setNetworkOptions((prev) => ({
@@ -117,10 +120,11 @@ export function BlockersPage() {
       setResults(scanResults);
       setStatus('done');
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong during the scan.');
+      const raw = err instanceof Error ? err.message : dict.common.scanErrorFallback;
+      setErrorMessage(localizeErrorMessage(raw, lang));
       setStatus('error');
     }
-  }, [handle, networkOptions]);
+  }, [handle, networkOptions, lang, dict]);
 
   const blockedResults = results.filter((r) => r.hasBlockedYou);
   const isScanning = status === 'scanning';
@@ -133,16 +137,12 @@ export function BlockersPage() {
 
   return (
     <>
-      <div className="eyebrow">Bluesky · Silence Audit</div>
-      <h1>Find out who quietly excommunicated you.</h1>
-      <p className="subhead">
-        Enter your handle. This reads the public block records of accounts across your extended
-        network, since anyone you follow directly can't have blocked you without also unfollowing
-        you first. Choose how far the search should reach below.
-      </p>
+      <div className="eyebrow">{dict.blockers.eyebrow}</div>
+      <h1>{dict.blockers.h1}</h1>
+      <p className="subhead">{dict.blockers.subhead}</p>
 
       <div className="options-panel">
-        <div className="options-title">Network reach</div>
+        <div className="options-title">{dict.blockers.networkReachTitle}</div>
         <div className="options-grid">
           {(['depth1', 'depth2', 'depth3'] as DepthKey[]).map((depthKey) => {
             const disabled =
@@ -158,7 +158,7 @@ export function BlockersPage() {
                       checked={networkOptions[depthKey].followers}
                       onChange={() => toggleOption(depthKey, 'followers')}
                     />
-                    Followers
+                    {dict.blockers.followers}
                   </label>
                   <label className="check">
                     <input
@@ -167,21 +167,18 @@ export function BlockersPage() {
                       checked={networkOptions[depthKey].following}
                       onChange={() => toggleOption(depthKey, 'following')}
                     />
-                    Following
+                    {dict.blockers.following}
                   </label>
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="options-hint">
-          Depth 2 and depth 3 unlock once the level above them has at least one relation selected.
-          Wider reach finds more, but takes longer.
-        </div>
+        <div className="options-hint">{dict.blockers.depthHint}</div>
       </div>
 
       <div className="options-panel">
-        <div className="options-title">Large accounts</div>
+        <div className="options-title">{dict.blockers.largeAccountsTitle}</div>
         <div className="skip-row">
           <label className="check">
             <input
@@ -190,11 +187,12 @@ export function BlockersPage() {
               checked={networkOptions.skipLargeAccounts.enabled}
               onChange={toggleSkipEnabled}
             />
-            Skip accounts over
+            {dict.blockers.skipOver}
           </label>
           <input
             type="text"
             inputMode="numeric"
+            dir="ltr"
             className="skip-count"
             disabled={isScanning || !networkOptions.skipLargeAccounts.enabled}
             value={skipCountInput}
@@ -217,12 +215,13 @@ export function BlockersPage() {
         </div>
         <div
           className={`skip-slider-wrap ${!networkOptions.skipLargeAccounts.enabled ? 'disabled' : ''}`}
+          dir="ltr"
         >
           <div
             className="skip-slider-bubble"
             style={{ left: `${skipSliderPct}%` }}
           >
-            {networkOptions.skipLargeAccounts.maxCount.toLocaleString()}
+            {formatNumber(networkOptions.skipLargeAccounts.maxCount, lang)}
           </div>
           <input
             type="range"
@@ -236,23 +235,19 @@ export function BlockersPage() {
             onChange={(e) => setSkipMaxCount(parseInt(e.target.value, 10))}
           />
           <div className="skip-slider-scale">
-            <span>100</span>
-            <span>20k</span>
+            <span>{formatScaleLabel(100, lang)}</span>
+            <span>{formatScaleLabel(20000, lang)}</span>
           </div>
         </div>
-        <div className="options-hint">
-          Accounts past this size are still counted as candidates, but their own network isn't
-          walked, since that's usually what makes a scan stall. "Either" skips on followers or
-          following, whichever is hit first.
-        </div>
+        <div className="options-hint">{dict.blockers.skipHint}</div>
       </div>
 
       <div className="search-row">
-        <div className="at-input-wrap">
+        <div className="at-input-wrap" dir="ltr">
           <span className="at-symbol">@</span>
           <input
             type="text"
-            placeholder="yourhandle.bsky.social"
+            placeholder={dict.blockers.handlePlaceholder}
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !isScanning && runScan()}
@@ -260,10 +255,10 @@ export function BlockersPage() {
           />
         </div>
         <button className="primary" onClick={runScan} disabled={isScanning || !handle.trim() || !hasAnyOption}>
-          {isScanning ? 'Scanning...' : 'Scan'}
+          {isScanning ? dict.blockers.scanning : dict.blockers.scan}
         </button>
       </div>
-      <div className="hint">No login required, this only reads public data.</div>
+      <div className="hint">{dict.common.noLogin}</div>
 
       {errorMessage && <div className="error-box">{errorMessage}</div>}
 
@@ -272,17 +267,18 @@ export function BlockersPage() {
       {(status === 'done' || (isScanning && results.length > 0)) && (
         <>
           <div className="results-summary">
-            <span className="count">{blockedResults.length}</span>
+            <span className="count">{formatNumber(blockedResults.length, lang)}</span>
             <span className="label">
-              {blockedResults.length === 1 ? 'account has' : 'accounts have'} excommunicated you
-              {status === 'done' ? `, out of ${results.length} checked` : ' so far...'}
+              {blockedResults.length === 1 ? dict.blockers.accountSingular : dict.blockers.accountPlural}{' '}
+              {dict.blockers.excommunicatedYou}
+              {status === 'done'
+                ? t('blockers.outOfChecked', { total: formatNumber(results.length, lang) })
+                : dict.blockers.soFar}
             </span>
           </div>
 
           {blockedResults.length === 0 ? (
-            status === 'done' && (
-              <div className="empty-state">No excommunications found in the reach you selected.</div>
-            )
+            status === 'done' && <div className="empty-state">{dict.blockers.emptyState}</div>
           ) : (
             blockedResults.map((r) => <ResultCard key={r.candidate.did} result={r} />)
           )}
@@ -290,10 +286,9 @@ export function BlockersPage() {
       )}
 
       <div className="footnote">
-        This only sees accounts reachable through the depth and relations you selected above, it
-        can't see every Bluesky account, since there's no public "who blocked me" index. Block
-        records are read directly and publicly from each account's own PDS repo (
-        <code>app.bsky.graph.block</code>), so nothing here requires you to log in.
+        {dict.blockers.footnote.split('{{code}}')[0]}
+        <code dir="ltr">app.bsky.graph.block</code>
+        {dict.blockers.footnote.split('{{code}}')[1]}
       </div>
     </>
   );

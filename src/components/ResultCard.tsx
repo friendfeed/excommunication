@@ -1,19 +1,15 @@
 import type { CandidateResult } from '../types';
-
-function formatBlockDate(iso?: string): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
+import { useLanguage } from '../i18n/LanguageContext';
+import { formatNumber, formatShortDate } from '../i18n/format';
 
 export function ResultCard({ result }: { result: CandidateResult }) {
+  const { lang, t } = useLanguage();
   const { candidate, viaAccount, relationship, depth, hasBlockedYou, blockDate } = result;
   const viaLabel =
     relationship === 'following'
-      ? `followed by @${viaAccount.handle}`
-      : `follows @${viaAccount.handle}`;
-  const blockedOn = formatBlockDate(blockDate);
+      ? t('blockers.via.followedBy', { handle: viaAccount.handle })
+      : t('blockers.via.follows', { handle: viaAccount.handle });
+  const blockedOn = formatShortDate(blockDate, lang);
 
   return (
     <div className={`result-card ${hasBlockedYou ? 'blocked' : ''}`}>
@@ -23,13 +19,15 @@ export function ResultCard({ result }: { result: CandidateResult }) {
         <div className="avatar" />
       )}
       <div className="result-info">
-        <div className="result-handle">@{candidate.handle}</div>
-        <div className="result-via">
-          {viaLabel} <span className="depth-tag">depth {depth}</span>
+        <div className="result-handle" dir="ltr">
+          @{candidate.handle}
         </div>
-        {blockedOn && <div className="result-block-date">Blocked you on {blockedOn}</div>}
+        <div className="result-via">
+          {viaLabel} <span className="depth-tag">{t('blockers.depthTag', { n: formatNumber(depth, lang) })}</span>
+        </div>
+        {blockedOn && <div className="result-block-date">{t('blockers.blockedOn', { date: blockedOn })}</div>}
       </div>
-      {hasBlockedYou && <span className="blocked-tag">Excommunicated</span>}
+      {hasBlockedYou && <span className="blocked-tag">{t('blockers.blockedTag')}</span>}
     </div>
   );
 }

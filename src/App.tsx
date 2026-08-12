@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BlockersPage } from './pages/BlockersPage';
 import { LedgerPage } from './pages/LedgerPage';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { useLanguage } from './i18n/LanguageContext';
 import type { Page } from './types';
 
 function pageFromHash(): Page {
@@ -8,6 +10,7 @@ function pageFromHash(): Page {
 }
 
 export function App() {
+  const { dict } = useLanguage();
   const [page, setPage] = useState<Page>(pageFromHash());
 
   useEffect(() => {
@@ -34,8 +37,9 @@ export function App() {
           <circle cx="32" cy="17.5" r="3.1" fill="#e6e3da" opacity="0.92" />
         </svg>
         <span className="app-bar-title">
-          {page === 'blockers' ? 'Silence Audit' : 'The Ledger'}
+          {page === 'blockers' ? dict.nav.blockers : dict.nav.ledger}
         </span>
+        <LanguageSwitcher />
       </div>
 
       <div className="app">
@@ -45,14 +49,14 @@ export function App() {
             className={`site-nav-tab ${page === 'blockers' ? 'active' : ''}`}
             onClick={() => navigate('blockers')}
           >
-            Silence Audit
+            {dict.nav.blockers}
           </button>
           <button
             type="button"
             className={`site-nav-tab ${page === 'ledger' ? 'active' : ''}`}
             onClick={() => navigate('ledger')}
           >
-            The Ledger
+            {dict.nav.ledger}
           </button>
         </nav>
 

@@ -2,11 +2,14 @@ import { useState, useCallback, useRef } from 'react';
 import { BlockListFetcher } from '../services/BlockListFetcher';
 import { LedgerPanel } from '../components/LedgerPanel';
 import { BlockedAccountRow } from '../components/BlockedAccountRow';
+import { useLanguage } from '../i18n/LanguageContext';
+import { formatNumber, localizeErrorMessage } from '../i18n/format';
 import type { BlockedAccountEntry, LedgerProgress } from '../types';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 
 export function LedgerPage() {
+  const { lang, dict, t } = useLanguage();
   const [handle, setHandle] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [progress, setProgress] = useState<LedgerProgress | null>(null);
@@ -29,29 +32,26 @@ export function LedgerPage() {
       setEntries(result);
       setStatus('done');
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong during the lookup.');
+      const raw = err instanceof Error ? err.message : dict.common.lookupErrorFallback;
+      setErrorMessage(localizeErrorMessage(raw, lang));
       setStatus('error');
     }
-  }, [handle]);
+  }, [handle, lang, dict]);
 
   const isLoading = status === 'loading';
 
   return (
     <>
-      <div className="eyebrow">Bluesky · The Ledger</div>
-      <h1>See who they've cast out.</h1>
-      <p className="subhead">
-        Enter any handle. This reads that account's own public block list directly, so the count
-        is exact, there's no network to walk here, an account's blocks are already a complete and
-        public record.
-      </p>
+      <div className="eyebrow">{dict.ledger.eyebrow}</div>
+      <h1>{dict.ledger.h1}</h1>
+      <p className="subhead">{dict.ledger.subhead}</p>
 
       <div className="search-row">
-        <div className="at-input-wrap">
+        <div className="at-input-wrap" dir="ltr">
           <span className="at-symbol">@</span>
           <input
             type="text"
-            placeholder="handle.bsky.social"
+            placeholder={dict.ledger.handlePlaceholder}
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !isLoading && runLookup()}
@@ -59,10 +59,10 @@ export function LedgerPage() {
           />
         </div>
         <button className="primary" onClick={runLookup} disabled={isLoading || !handle.trim()}>
-          {isLoading ? 'Reading...' : 'Reveal'}
+          {isLoading ? dict.ledger.reading : dict.ledger.reveal}
         </button>
       </div>
-      <div className="hint">No login required, this only reads public data.</div>
+      <div className="hint">{dict.common.noLogin}</div>
 
       {errorMessage && <div className="error-box">{errorMessage}</div>}
 
@@ -71,14 +71,15 @@ export function LedgerPage() {
       {status === 'done' && (
         <>
           <div className="results-summary">
-            <span className="count">{entries.length}</span>
+            <span className="count">{formatNumber(entries.length, lang)}</span>
             <span className="label">
-              {entries.length === 1 ? 'account' : 'accounts'} excommunicated by @{resolvedHandle}
+              {entries.length === 1 ? dict.ledger.accountSingular : dict.ledger.accountPlural}{' '}
+              {t('ledger.excommunicatedBy', { handle: resolvedHandle })}
             </span>
           </div>
 
           {entries.length === 0 ? (
-            <div className="empty-state">This account hasn't cast anyone out.</div>
+            <div className="empty-state">{dict.ledger.emptyState}</div>
           ) : (
             entries.map((entry) => <BlockedAccountRow key={entry.actor.did} entry={entry} />)
           )}
@@ -86,9 +87,9 @@ export function LedgerPage() {
       )}
 
       <div className="footnote">
-        This reads the account's <code>app.bsky.graph.block</code> collection directly from its
-        own PDS repo, which is public by design under the AT Protocol, so nothing here requires
-        you to log in.
+        {dict.ledger.footnote.split('{{code}}')[0]}
+        <code dir="ltr">app.bsky.graph.block</code>
+        {dict.ledger.footnote.split('{{code}}')[1]}
       </div>
     </>
   );

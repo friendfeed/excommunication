@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Jost:wght@200;300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Jost:wght@200;300;400;500&family=JetBrains+Mono:wght@300;400;500&family=Vazirmatn:wght@300;400;500;600&display=swap');
 
 :root {
   --bg: #08090b;
@@ -27,6 +27,15 @@
   --font-display: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
   --font-body: 'Jost', 'DM Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /*
+   * Vazirmatn is the de-facto standard Farsi UI webfont: it's a variable,
+   * open-source typeface purpose-built for interfaces (not editorial/print),
+   * with full Persian digit and diacritic support and weights that match
+   * Jost's light, modern feel closely enough to keep the two languages
+   * feeling like the same brand rather than a bolted-on translation.
+   */
+  --font-fa: 'Vazirmatn', 'Tahoma', system-ui, sans-serif;
 
   /* Sticky app-bar height, used by the shell's scroll offset */
   --app-bar-h: 52px;
@@ -105,6 +114,46 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * Language switcher — lives at the trailing edge of the app bar (right in
+ * English, automatically flips to the left in Farsi since it uses
+ * margin-inline-start), the same top-level, always-visible placement used
+ * for the utility controls on hassanireza.github.io's own nav. It always
+ * shows the name of the *other* language, so the label doubles as its own
+ * instruction ("فارسی" invites switching to Farsi; "English" invites
+ * switching back).
+ */
+.lang-switch {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  background: transparent;
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-card);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  padding: 5px 10px;
+  min-height: 28px;
+  cursor: pointer;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.lang-switch[lang='fa'] {
+  font-family: var(--font-fa);
+  letter-spacing: normal;
+  font-size: 0.72rem;
+}
+
+.lang-switch:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 /* ---------------------------------------------------------------- */
@@ -367,7 +416,9 @@ h1 {
   background: transparent;
   color: var(--text-3);
   border: none;
-  border-right: 1px solid var(--border);
+  /* Logical property: automatically becomes the left border in RTL, so the
+     divider always sits between buttons instead of on the outer edge. */
+  border-inline-end: 1px solid var(--border);
   padding: 9px 12px;
   min-height: 36px;
   font-family: var(--font-mono);
@@ -378,7 +429,7 @@ h1 {
 }
 
 .skip-metric:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 
 .skip-metric:hover:not(:disabled) {
@@ -893,5 +944,115 @@ button.primary:disabled {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Farsi / RTL localization                                            */
+/*                                                                      */
+/* Flex rows using `flex-direction: row` (site-nav, result-card,       */
+/* results-summary, depth-checks, skip-row, search-row, etc.) already   */
+/* mirror automatically under `dir="rtl"`, as does default text-align  */
+/* (nothing in this file sets an explicit left/right text-align), so   */
+/* only the exceptions below need hand overrides:                     */
+/*   - Latin display/mono fonts have no Farsi glyphs at all, so any    */
+/*     element that can hold Farsi copy is repointed to --font-fa.      */
+/*   - Wide letter-spacing / uppercase tracking is an English display   */
+/*     convention; on Persian's joined, cursive script it breaks the    */
+/*     letter connections, so it's reset to normal for Farsi text.      */
+/*   - Italic is likewise a Latin-type convention with no Farsi         */
+/*     equivalent in Vazirmatn's intended use, so headings go upright.  */
+/*   - The numeric slider/progress widgets stay logically LTR (a        */
+/*     common, expected pattern for numeric controls even inside RTL    */
+/*     interfaces) since their fill math is left-to-right by design.    */
+/* ------------------------------------------------------------------ */
+
+[dir='rtl'] body {
+  font-family: var(--font-fa);
+  /* Persian script reads comfortably a touch larger and looser than the
+     tightly-tracked Latin body copy this design was tuned for. */
+  line-height: 1.85;
+}
+
+[dir='rtl'] .app-bar-title,
+[dir='rtl'] .depth-label,
+[dir='rtl'] .empty-state,
+[dir='rtl'] h1 {
+  font-family: var(--font-fa);
+  font-style: normal;
+}
+
+[dir='rtl'] h1 {
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+[dir='rtl'] .eyebrow,
+[dir='rtl'] .subhead,
+[dir='rtl'] .options-title,
+[dir='rtl'] .options-hint,
+[dir='rtl'] .check,
+[dir='rtl'] .skip-metric,
+[dir='rtl'] button.primary,
+[dir='rtl'] .hint,
+[dir='rtl'] .scan-phase,
+[dir='rtl'] .scan-message,
+[dir='rtl'] .results-summary .label,
+[dir='rtl'] .results-summary .count,
+[dir='rtl'] .footnote,
+[dir='rtl'] .result-via,
+[dir='rtl'] .depth-tag,
+[dir='rtl'] .result-block-date,
+[dir='rtl'] .blocked-tag,
+[dir='rtl'] .site-nav-tab,
+[dir='rtl'] .error-box {
+  font-family: var(--font-fa);
+  letter-spacing: normal;
+}
+
+[dir='rtl'] .eyebrow {
+  /* A little tracking still reads fine on short Farsi header labels and
+     keeps the eyebrow's "label" feel; wide English-level tracking (0.28em+)
+     does not. */
+  letter-spacing: 0.04em;
+}
+
+[dir='rtl'] .site-nav-tab,
+[dir='rtl'] .options-title,
+[dir='rtl'] button.primary,
+[dir='rtl'] .scan-phase,
+[dir='rtl'] .blocked-tag {
+  text-transform: none;
+}
+
+[dir='rtl'] .results-summary .count {
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* Handles, hostnames, and code stay Latin/LTR content even inside a Farsi
+   page (an AT Protocol handle is always a Latin domain-like string), so
+   these keep the monospace font and their own left-to-right run. */
+[dir='rtl'] .result-handle,
+[dir='rtl'] .footnote code,
+[dir='rtl'] .skip-count {
+  font-family: var(--font-mono);
+}
+
+/* Numeric widgets: keep their internal maths left-to-right, which is the
+   common, predictable pattern for sliders/progress bars even in RTL apps. */
+[dir='rtl'] .skip-slider-wrap,
+[dir='rtl'] .progress-track {
+  direction: ltr;
+}
+
+[dir='rtl'] .lang-switch {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 639px) {
+  [dir='rtl'] .lang-switch {
+    font-size: 0.66rem;
+    padding: 4px 8px;
   }
 }
