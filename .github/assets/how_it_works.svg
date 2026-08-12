@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1013"/>
+      <stop offset="100%" stop-color="#08090b"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#7c8891"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="260" fill="url(#bg2)"/>
+  <rect x="0.5" y="0.5" width="1199" height="259" fill="none" stroke="#161a1e"/>
+
+  <!-- step nodes -->
+  <g font-family="'Jost','DM Sans',system-ui,sans-serif">
+    <!-- node 1 -->
+    <g transform="translate(120,130)">
+      <circle r="34" fill="none" stroke="#7c8891" stroke-width="1.4"/>
+      <text text-anchor="middle" y="7" font-size="20" fill="#e6e3da" font-family="'Cormorant Garamond',serif">1</text>
+      <text text-anchor="middle" y="66" font-size="13" fill="#c9cfd2" letter-spacing="0.5">Resolve handle</text>
+      <text text-anchor="middle" y="86" font-size="11" fill="#7f8589">handle &#8594; DID</text>
+    </g>
+    <line x1="164" y1="130" x2="266" y2="130" stroke="#7c8891" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- node 2 -->
+    <g transform="translate(310,130)">
+      <circle r="34" fill="none" stroke="#7c8891" stroke-width="1.4"/>
+      <text text-anchor="middle" y="7" font-size="20" fill="#e6e3da" font-family="'Cormorant Garamond',serif">2</text>
+      <text text-anchor="middle" y="66" font-size="13" fill="#c9cfd2" letter-spacing="0.5">Map your root</text>
+      <text text-anchor="middle" y="86" font-size="11" fill="#7f8589">who you follow</text>
+    </g>
+    <line x1="354" y1="130" x2="456" y2="130" stroke="#7c8891" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- node 3 -->
+    <g transform="translate(500,130)">
+      <circle r="34" fill="none" stroke="#7c8891" stroke-width="1.4"/>
+      <text text-anchor="middle" y="7" font-size="20" fill="#e6e3da" font-family="'Cormorant Garamond',serif">3</text>
+      <text text-anchor="middle" y="66" font-size="13" fill="#c9cfd2" letter-spacing="0.5">Walk outward</text>
+      <text text-anchor="middle" y="86" font-size="11" fill="#7f8589">up to 3 levels deep</text>
+    </g>
+    <line x1="544" y1="130" x2="646" y2="130" stroke="#7c8891" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- node 4 -->
+    <g transform="translate(690,130)">
+      <circle r="34" fill="none" stroke="#7c8891" stroke-width="1.4"/>
+      <text text-anchor="middle" y="7" font-size="20" fill="#e6e3da" font-family="'Cormorant Garamond',serif">4</text>
+      <text text-anchor="middle" y="66" font-size="13" fill="#c9cfd2" letter-spacing="0.5">Find each PDS</text>
+      <text text-anchor="middle" y="86" font-size="11" fill="#7f8589">their home server</text>
+    </g>
+    <line x1="734" y1="130" x2="836" y2="130" stroke="#7c8891" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+    <!-- node 5 -->
+    <g transform="translate(880,130)">
+      <circle r="34" fill="none" stroke="#d97060" stroke-width="1.6"/>
+      <text text-anchor="middle" y="7" font-size="20" fill="#e6e3da" font-family="'Cormorant Garamond',serif">5</text>
+      <text text-anchor="middle" y="66" font-size="13" fill="#c9cfd2" letter-spacing="0.5">Read block records</text>
+      <text text-anchor="middle" y="86" font-size="11" fill="#7f8589">check for your DID</text>
+    </g>
+  </g>
+</svg>

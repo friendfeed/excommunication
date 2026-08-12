@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300">
+  <defs>
+    <radialGradient id="light" cx="50%" cy="28%" r="70%">
+      <stop offset="0%" stop-color="#e6e3da" stop-opacity="0.28"/>
+      <stop offset="45%" stop-color="#7c8891" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#08090b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d1013"/>
+      <stop offset="100%" stop-color="#08090b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#fade)"/>
+  <rect width="1200" height="300" fill="url(#light)"/>
+  <rect x="0.5" y="0.5" width="1199" height="299" fill="none" stroke="#161a1e" stroke-width="1"/>
+
+  <g transform="translate(600,108)">
+    <path d="M 29.8 -6.6 A 27 27 0 1 1 -29.8 -6.6" fill="none" stroke="#7c8891" stroke-width="3.2" stroke-linecap="round"/>
+    <circle cx="0" cy="-33.5" r="5.4" fill="#e6e3da" opacity="0.92"/>
+  </g>
+
+  <text x="600" y="185" text-anchor="middle" font-family="'Cormorant Garamond','EB Garamond',Georgia,serif" font-weight="300" font-size="46" fill="#e6e3da" letter-spacing="1.5">The Excommunication Registry</text>
+  <text x="600" y="218" text-anchor="middle" font-family="'Jost','DM Sans',system-ui,sans-serif" font-weight="300" font-size="15" fill="#9aa3a8" letter-spacing="3">A QUIET AUDIT OF WHO HAS LEFT YOUR NETWORK</text>
+
+  <line x1="500" y1="240" x2="700" y2="240" stroke="#1c2126" stroke-width="1"/>
+  <circle cx="600" cy="240" r="2.5" fill="#d97060"/>
+</svg>
