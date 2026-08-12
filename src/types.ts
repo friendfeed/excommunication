@@ -52,6 +52,8 @@ export interface CandidateResult {
   depth: 1 | 2 | 3;
   viaAccount: ActorProfile; // the account that led to this candidate
   hasBlockedYou: boolean;
+  /** When the block record was created, if `hasBlockedYou` is true. */
+  blockDate?: string;
   checked: boolean;
   error?: string;
 }
@@ -61,6 +63,8 @@ export interface ScanProgress {
   message: string;
   current?: number;
   total?: number;
+  /** Live snapshot of all candidates discovered so far, updated as each block check completes. */
+  results?: CandidateResult[];
 }
 
 export type ProgressCallback = (progress: ScanProgress) => void;

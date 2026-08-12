@@ -26,6 +26,9 @@ export function App() {
   const [results, setResults] = useState<CandidateResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [networkOptions, setNetworkOptions] = useState<NetworkOptions>(DEFAULT_NETWORK_OPTIONS);
+  const [skipCountInput, setSkipCountInput] = useState(
+    String(DEFAULT_NETWORK_OPTIONS.skipLargeAccounts.maxCount)
+  );
   const scannerRef = useRef(new BlockScanner());
 
   const toggleOption = useCallback((depth: DepthKey, key: 'followers' | 'following') => {
@@ -50,11 +53,39 @@ export function App() {
   }, []);
 
   const setSkipMaxCount = useCallback((value: number) => {
+    const clean = Number.isFinite(value) && value > 0 ? value : 0;
     setNetworkOptions((prev) => ({
       ...prev,
-      skipLargeAccounts: { ...prev.skipLargeAccounts, maxCount: Number.isFinite(value) && value > 0 ? value : 0 },
+      skipLargeAccounts: { ...prev.skipLargeAccounts, maxCount: clean },
     }));
+    setSkipCountInput(String(clean));
   }, []);
+
+  // The skip-count number field is backed by its own string state so the user can
+  // freely clear it and type a new value without a stale leading "0" sticking around
+  // (a plain `value={someNumber}` controlled input re-inserts "0" before new digits
+  // whenever the field is momentarily empty).
+  const handleSkipCountInputChange = useCallback((raw: string) => {
+    const digitsOnly = raw.replace(/[^0-9]/g, '');
+    const normalized = digitsOnly.replace(/^0+(?=\d)/, '');
+    setSkipCountInput(normalized);
+    if (normalized !== '') {
+      setNetworkOptions((prev) => ({
+        ...prev,
+        skipLargeAccounts: { ...prev.skipLargeAccounts, maxCount: parseInt(normalized, 10) },
+      }));
+    }
+  }, []);
+
+  const handleSkipCountInputBlur = useCallback(() => {
+    if (skipCountInput === '') {
+      setSkipCountInput('0');
+      setNetworkOptions((prev) => ({
+        ...prev,
+        skipLargeAccounts: { ...prev.skipLargeAccounts, maxCount: 0 },
+      }));
+    }
+  }, [skipCountInput]);
 
   const depth1Active = networkOptions.depth1.followers || networkOptions.depth1.following;
   const skipSliderMin = 100;
@@ -77,7 +108,12 @@ export function App() {
     setResults([]);
 
     try {
-      const scanResults = await scannerRef.current.scan(cleaned, networkOptions, (p) => setProgress(p));
+      const scanResults = await scannerRef.current.scan(cleaned, networkOptions, (p) => {
+        setProgress(p);
+        // Blocks get checked in parallel as the scan goes, so stream each snapshot
+        // straight into state instead of waiting for the whole scan to finish.
+        if (p.results) setResults([...p.results]);
+      });
       setResults(scanResults);
       setStatus('done');
     } catch (err) {
@@ -157,13 +193,13 @@ export function App() {
             Skip accounts over
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             className="skip-count"
-            min={0}
-            step={100}
             disabled={isScanning || !networkOptions.skipLargeAccounts.enabled}
-            value={networkOptions.skipLargeAccounts.maxCount}
-            onChange={(e) => setSkipMaxCount(parseInt(e.target.value, 10))}
+            value={skipCountInput}
+            onChange={(e) => handleSkipCountInputChange(e.target.value)}
+            onBlur={handleSkipCountInputBlur}
           />
           <div className="skip-metric-group">
             {(['followers', 'following', 'both'] as SkipMetric[]).map((metric) => (
@@ -233,18 +269,20 @@ export function App() {
 
       {progress && (status === 'scanning' || status === 'done') && <ScanPanel progress={progress} />}
 
-      {status === 'done' && (
+      {(status === 'done' || (isScanning && results.length > 0)) && (
         <>
           <div className="results-summary">
             <span className="count">{blockedResults.length}</span>
             <span className="label">
-              {blockedResults.length === 1 ? 'account has' : 'accounts have'} excommunicated you, out
-              of {results.length} checked
+              {blockedResults.length === 1 ? 'account has' : 'accounts have'} excommunicated you
+              {status === 'done' ? `, out of ${results.length} checked` : ' so far...'}
             </span>
           </div>
 
           {blockedResults.length === 0 ? (
-            <div className="empty-state">No excommunications found in the reach you selected.</div>
+            status === 'done' && (
+              <div className="empty-state">No excommunications found in the reach you selected.</div>
+            )
           ) : (
             blockedResults.map((r) => <ResultCard key={r.candidate.did} result={r} />)
           )}
