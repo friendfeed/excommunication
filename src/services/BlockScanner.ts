@@ -132,18 +132,23 @@ export class BlockScanner {
     let checked = 0;
     await asyncPool(candidates, 8, async (result) => {
       try {
-        result.hasBlockedYou = await this.blockReader.hasBlocked(result.candidate.did, target.did);
+        const blockDate = await this.blockReader.findBlockDate(result.candidate.did, target.did);
+        result.hasBlockedYou = blockDate !== null;
+        result.blockDate = blockDate ?? undefined;
         result.checked = true;
       } catch (err) {
         result.checked = false;
         result.error = err instanceof Error ? err.message : 'Unknown error';
       } finally {
         checked++;
+        // Emit a live snapshot so the UI can render newly-confirmed blocks as they
+        // come in, instead of waiting for the whole pool to finish.
         onProgress({
           phase: 'checking-blocks',
           message: `Checked ${checked} of ${candidates.length}...`,
           current: checked,
           total: candidates.length,
+          results: candidates,
         });
       }
     });

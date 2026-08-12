@@ -11,6 +11,14 @@ export class BlockRecordReader {
 
   /** Returns true if `blockerDid`'s repo contains a block record targeting `targetDid`. */
   public async hasBlocked(blockerDid: string, targetDid: string): Promise<boolean> {
+    return (await this.findBlockDate(blockerDid, targetDid)) !== null;
+  }
+
+  /**
+   * Returns the `createdAt` timestamp of the block record `blockerDid` holds against
+   * `targetDid`, or `null` if no such record exists (or the repo can't be reached).
+   */
+  public async findBlockDate(blockerDid: string, targetDid: string): Promise<string | null> {
     const pds = await this.resolver.resolvePdsUrl(blockerDid);
     let cursor: string | undefined;
 
@@ -24,20 +32,20 @@ export class BlockRecordReader {
       const res = await fetch(url.toString());
       if (!res.ok) {
         // No block collection, private/unreachable PDS, etc. Treat as "not found".
-        return false;
+        return null;
       }
       const data = await res.json();
       const records = (data.records ?? []) as any[];
 
       for (const r of records) {
         const record = this.toBlockRecord(r);
-        if (record.subjectDid === targetDid) return true;
+        if (record.subjectDid === targetDid) return record.createdAt ?? null;
       }
 
       cursor = data.cursor;
     } while (cursor);
 
-    return false;
+    return null;
   }
 
   private toBlockRecord(raw: any): BlockRecord {
