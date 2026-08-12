@@ -48,6 +48,40 @@ export class BlockRecordReader {
     return null;
   }
 
+  /**
+   * Returns every block record held in `did`'s own repo. Unlike `hasBlocked`,
+   * this doesn't stop at a match, it reads the whole collection, since the
+   * point here is the full list (and count) of who this account has blocked.
+   */
+  public async listAllBlocks(did: string, onPage?: (count: number) => void): Promise<BlockRecord[]> {
+    const pds = await this.resolver.resolvePdsUrl(did);
+    const records: BlockRecord[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const url = new URL(`${pds}/xrpc/com.atproto.repo.listRecords`);
+      url.searchParams.set('repo', did);
+      url.searchParams.set('collection', 'app.bsky.graph.block');
+      url.searchParams.set('limit', '100');
+      if (cursor) url.searchParams.set('cursor', cursor);
+
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        if (records.length === 0) {
+          throw new Error(`Could not read block records for this account (HTTP ${res.status}).`);
+        }
+        break;
+      }
+      const data = await res.json();
+      const page = (data.records ?? []) as any[];
+      for (const r of page) records.push(this.toBlockRecord(r));
+      cursor = data.cursor;
+      onPage?.(records.length);
+    } while (cursor);
+
+    return records;
+  }
+
   private toBlockRecord(raw: any): BlockRecord {
     return {
       uri: raw.uri,

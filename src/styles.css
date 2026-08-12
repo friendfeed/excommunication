@@ -45,8 +45,49 @@ body {
 .app {
   max-width: 760px;
   margin: 0 auto;
-  padding: 7rem 20px 6rem;
+  padding: 5.5rem 20px 6rem;
   animation: surface 1s var(--ease-liturgy) both;
+}
+
+/* Site navigation */
+.site-nav {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 3.4rem;
+}
+
+.site-nav-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-family: var(--font-body);
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 0 0 1rem;
+  margin-right: 2rem;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.25s var(--ease);
+}
+
+.site-nav-tab:hover {
+  color: var(--text-2);
+}
+
+.site-nav-tab.active {
+  color: var(--text);
+}
+
+.site-nav-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--accent-bright);
 }
 
 @keyframes surface {

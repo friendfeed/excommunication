@@ -56,6 +56,36 @@ export class BlueskyApi {
     return out;
   }
 
+  /**
+   * Batch-resolves up to 25 DIDs at a time into full profiles (handle,
+   * display name, avatar). Used to turn the bare DIDs found in block
+   * records into something displayable.
+   */
+  public async getProfiles(dids: string[]): Promise<Map<string, ActorProfile>> {
+    const out = new Map<string, ActorProfile>();
+    const chunkSize = 25;
+
+    for (let i = 0; i < dids.length; i += chunkSize) {
+      const chunk = dids.slice(i, i + chunkSize);
+      const url = new URL(`${BlueskyApi.BASE}/app.bsky.actor.getProfiles`);
+      for (const did of chunk) url.searchParams.append('actors', did);
+
+      try {
+        const res = await fetch(url.toString());
+        if (!res.ok) continue;
+        const data = await res.json();
+        const profiles = (data.profiles ?? []) as any[];
+        for (const p of profiles) {
+          out.set(p.did, { did: p.did, handle: p.handle, displayName: p.displayName, avatar: p.avatar });
+        }
+      } catch {
+        // A failed chunk just means those DIDs stay unresolved; the caller falls back to the raw DID.
+      }
+    }
+
+    return out;
+  }
+
   /** Returns every account `actor` follows. */
   public async getAllFollows(actor: string, onPage?: (count: number) => void): Promise<ActorProfile[]> {
     return this.paginate(actor, 'app.bsky.graph.getFollows', 'follows', onPage);

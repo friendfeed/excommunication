@@ -68,3 +68,24 @@ export interface ScanProgress {
 }
 
 export type ProgressCallback = (progress: ScanProgress) => void;
+
+/** Which page of the site is currently shown. */
+export type Page = 'blockers' | 'ledger';
+
+/** One account found in another account's block list. */
+export interface BlockedAccountEntry {
+  actor: ActorProfile;
+  /** When the block record was created, if known. */
+  blockedAt?: string;
+}
+
+export interface LedgerProgress {
+  phase: 'resolving' | 'reading-blocks' | 'resolving-profiles' | 'done' | 'error';
+  message: string;
+  current?: number;
+  total?: number;
+  /** Present once the lookup finishes. */
+  entries?: BlockedAccountEntry[];
+}
+
+export type LedgerProgressCallback = (progress: LedgerProgress) => void;
