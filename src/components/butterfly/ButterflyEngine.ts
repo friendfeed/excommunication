@@ -526,10 +526,29 @@ export class ButterflyEngine {
     const flareFrac      = smoothstep(clamp((closeness - 0.75) / 0.25, 0, 1));
     const targetHeading  = travelHeading + angleDiff(restHeading, travelHeading) * flareFrac;
 
-    // Rate ramps up as it closes in, so heading has already essentially
-    // converged to targetHeading well before touchdown instead of still
-    // correcting a large residual right when the forced snap below fires.
-    const headingRate = lerp(4, 22, eased);
+    // ── Anchor-point / "towed by a rope" fix ────────────────────────────
+    // updateFlying() steers heading-first: velocity is derived FROM heading,
+    // so the two can never disagree there. Landing breaks that link —
+    // (vx, vy) below is set straight at the perch, independent of
+    // `heading` — and re-links them only through this proportional
+    // correction. That's fine as long as the correction is fast relative
+    // to how far the body has already committed to moving, but the rate
+    // used to be keyed ONLY to `eased` (closeness/distance to the perch),
+    // which is ~0 for the first frames of landing regardless of how big
+    // the heading error actually is. A perch trigger that interrupts a
+    // hard bank (heading still sweeping through a turn — "turning toward
+    // sides") hands landing a large heading/travel mismatch at exactly
+    // the moment `eased` was smallest, so for a third of a second the
+    // body already flew a straight beeline for the perch while the drawn
+    // sprite was still rotating through its old turn — visibly detached
+    // from its own motion, like the perch was reeling it in on a line
+    // rather than the butterfly flying there under its own power. A flat,
+    // always-brisk floor (instead of one that ramps up only as distance
+    // closes) fixes this regardless of how the mismatch arose, and
+    // regardless of its size — moderate 30-50° errors are just as visible
+    // as large ones over that ~0.3s window, so the floor has to cover the
+    // whole range, not just extreme reversals.
+    const headingRate = lerp(16, 30, eased);
     this.heading += angleDiff(targetHeading, this.heading) * headingRate * dt;
 
     // Wings keep actively beating almost the entire way in — the brace
