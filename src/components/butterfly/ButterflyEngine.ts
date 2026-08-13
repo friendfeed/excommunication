@@ -92,6 +92,14 @@ export class ButterflyEngine {
   private perchFanDur     = 1;
   private perchFanHold    = 0;
 
+  // Continuous 0 (airborne) → 1 (grounded) blend used purely for rendering
+  // (shadow shape/position/opacity). The old code picked between two very
+  // different hard-coded shadow poses based on a boolean the instant
+  // `state === 'perching'` flipped true — a same-frame jump in shadow
+  // size, offset, and alpha that read as a small pop/flicker right at
+  // touchdown. Easing this value instead of switching it removes that.
+  private groundedness = 0;
+
   // Navigation
   private targetX = 0;
   private targetY = 0;
@@ -194,32 +202,48 @@ export class ButterflyEngine {
       '.search-row',
     ];
 
+    // Corner inset: how far in from each true corner the perch sits, so the
+    // sprite reads as balanced on the corner rather than clipping over the
+    // edge. Capped as a fraction of the element's own width so tiny
+    // elements still get a sensible (not oversized) inset.
+    const CORNER_INSET = 10;
+
     for (const sel of selectors) {
       for (const el of document.querySelectorAll<HTMLElement>(sel)) {
         const r = el.getBoundingClientRect();
-        if (r.width < 10 || r.height < 10) continue;
+        if (r.width < 24 || r.height < 10) continue;
         const top    = r.top    - cr.top;
         const left   = r.left   - cr.left;
         const right  = left + r.width;
         const bottom = top + r.height;
+        const inset  = Math.min(CORNER_INSET, r.width * 0.18);
 
-        // Sample along top edge (most natural for butterfly to land on)
-        const steps = Math.min(4, Math.floor(r.width / 80));
-        for (let i = 0; i <= steps; i++) {
-          const frac = steps === 0 ? 0.5 : i / steps;
-          const fracX = 0.1 + frac * 0.8;
-          const px = left + r.width * fracX;
-          // only add if on canvas (compare against logical CSS-pixel size,
-          // not this.canvas.width which is in device pixels)
-          if (px > 0 && px < this.cssW && top > 20 && top < this.cssH - 20) {
-            list.push({ x: px, y: top, normal: -Math.PI / 2, el, fracX });
+        // Land on the actual corners — where two edges of the box meet —
+        // instead of an arbitrary point drifting along an edge. This is
+        // what makes the butterfly read as perching *on* the site's own
+        // geometry (a button's corner, a panel's rim) rather than just
+        // floating somewhere near it.
+        const topLeftX  = left + inset;
+        const topRightX = right - inset;
+        if (top > 20 && top < this.cssH - 20) {
+          if (topLeftX > 0 && topLeftX < this.cssW) {
+            list.push({ x: topLeftX, y: top, normal: -Math.PI / 2, el, fracX: inset / r.width });
+          }
+          if (topRightX > 0 && topRightX < this.cssW) {
+            list.push({ x: topRightX, y: top, normal: -Math.PI / 2, el, fracX: 1 - inset / r.width });
           }
         }
-        // Bottom edge occasionally
+        // Bottom corners occasionally, for variety
         if (bottom > 20 && bottom < this.cssH - 20) {
-          list.push({ x: left + r.width * 0.5, y: bottom, normal: Math.PI / 2, el, fracX: 0.5 });
+          const botLeftX  = left + inset;
+          const botRightX = right - inset;
+          if (botLeftX > 0 && botLeftX < this.cssW) {
+            list.push({ x: botLeftX, y: bottom, normal: Math.PI / 2, el, fracX: inset / r.width });
+          }
+          if (botRightX > 0 && botRightX < this.cssW) {
+            list.push({ x: botRightX, y: bottom, normal: Math.PI / 2, el, fracX: 1 - inset / r.width });
+          }
         }
-        void right;
       }
     }
 
@@ -238,7 +262,9 @@ export class ButterflyEngine {
     const W = this.cssW || this.canvas.width;
     const H = this.cssH || this.canvas.height;
 
-    const wantPerch = this.perches.length > 0 && Math.random() < 0.38;
+    // Land on real page geometry most of the time so the butterfly reads
+    // as interacting with the site rather than wandering empty space.
+    const wantPerch = this.perches.length > 0 && Math.random() < 0.62;
 
     if (wantPerch) {
       const p = this.perches[Math.floor(Math.random() * this.perches.length)];
@@ -246,6 +272,15 @@ export class ButterflyEngine {
       this.targetX = p.x;
       this.targetY = p.y;
       this.perch   = p;
+    } else if (this.perches.length > 0 && Math.random() < 0.7) {
+      // Even a non-landing "wander" leg mostly flies BY a real element
+      // rather than into open air — a fly-past near a corner still reads
+      // as tracing the page's own layout instead of drifting randomly.
+      const p = this.perches[Math.floor(Math.random() * this.perches.length)];
+      this.refreshPerch(p);
+      this.targetX = clamp(p.x + (Math.random() - 0.5) * 140, 60, W - 60);
+      this.targetY = clamp(p.y + (Math.random() - 0.5) * 100, 50, H - 50);
+      this.perch   = null;
     } else {
       this.targetX = clamp(this.x + (Math.random() - 0.48) * W * 0.52, 60, W - 60);
       this.targetY = clamp(this.y + (Math.random() - 0.5)  * H * 0.42, 50, H - 50);
@@ -327,6 +362,12 @@ export class ButterflyEngine {
       case 'perching':  this.updatePerching(dt);  break;
       case 'taking-off':this.updateTakingOff(dt); break;
     }
+
+    // Ease groundedness toward 1 while landing/perched, toward 0 otherwise
+    // — drives a continuous shadow blend in draw() instead of a hard
+    // per-state switch (see the field comment above).
+    const groundedTarget = (this.state === 'perching' || this.state === 'landing') ? 1 : 0;
+    this.groundedness += (groundedTarget - this.groundedness) * 10 * dt;
   }
 
   private updateFlying(dt: number) {
@@ -356,32 +397,69 @@ export class ButterflyEngine {
       return;
     }
 
-    // Cruise speed — varies slightly for organic feel
-    const speed = 140 + Math.sin(this.flapPhase * TWO_PI) * 12;
+    // ── Heading-first steering ──────────────────────────────────────────
+    // A real flying creature can't slide sideways: it turns to face where
+    // it wants to go, THEN moves along the direction it's facing. The old
+    // model did the opposite — it computed velocity straight toward the
+    // target and let heading play catch-up on a separate, slower timer.
+    // For a beat or two mid-turn, the velocity vector (where the body was
+    // actually travelling) and the drawn orientation (where it was
+    // pointing) disagreed — which reads as an unphysical skid/slide
+    // instead of a bank. Turning the heading first, at a capped turn
+    // rate, and driving velocity from that heading afterward removes the
+    // mismatch: the body only ever moves exactly where it's pointed.
+    const desiredHeading = Math.atan2(dy, dx);
+    const hdDiff = angleDiff(desiredHeading, this.heading);
 
-    // Desired velocity
-    const dvx = (dx / dist) * speed;
-    const dvy = (dy / dist) * speed;
+    // How sharp a correction this is: 0 = already pointed the right way,
+    // 1 = a full reversal (target is roughly behind it).
+    const turnSeverity = clamp(Math.abs(hdDiff) / Math.PI, 0, 1);
 
-    // Smooth acceleration
-    const k = 3.6;
-    this.vx += (dvx - this.vx) * k * dt;
-    this.vy += (dvy - this.vy) * k * dt;
+    // Sharper reversals turn faster — up to a point. This matters most
+    // for near-180° retargets (e.g. it was cruising left and the newly
+    // picked target is off to the right): a fixed, moderate turn rate
+    // meant heading was still mostly pointed the OLD way for a good
+    // fraction of a second while a nearly-unthrottled body kept sailing
+    // further in the old direction — reading as if it were flying
+    // backward relative to where its nose had started turning.
+    const maxTurnRate = lerp(2.2, 5.4, turnSeverity); // rad/s
+    const turnStep = clamp(hdDiff * 6, -maxTurnRate, maxTurnRate);
+    this.heading += turnStep * dt;
 
-    // Altitude undulation (butterflies bob up/down with each wing beat)
+    // Speed drops hard — not just eases — for a sharp turn. A real insect
+    // essentially stops forward progress and flutters in place while
+    // reversing course rather than carving a wide, fast loop; the old
+    // formula only ever cut speed by 45% even at a full reversal, which
+    // wasn't enough to stop the "still sailing the old way" look above.
+    const baseSpeed = 140 + Math.sin(this.flapPhase * TWO_PI) * 12;
+    const speed = baseSpeed * (1 - Math.pow(turnSeverity, 1.6) * 0.85);
+
+    // Velocity is derived DIRECTLY from heading every frame — no separate
+    // smoothing/lag here. Heading itself already has the turn-rate cap
+    // above, which is where all the "smoothness" should live. The
+    // previous version additionally low-pass-filtered velocity toward the
+    // heading-derived target (k=6.5), which meant that for a brief window
+    // after any heading change, the body kept MOVING in the old direction
+    // for a beat while it was already visually POINTING the new way —
+    // orientation leading motion is exactly what reads as a car drifting
+    // through a turn instead of a bird/insect banking cleanly into one.
+    this.vx = Math.cos(this.heading) * speed;
+    this.vy = Math.sin(this.heading) * speed;
+
+    // Altitude undulation (butterflies bob up/down with each wing beat) —
+    // a small perpendicular wobble layered on top of true heading-aligned
+    // travel, not a competing steering signal, so it doesn't reintroduce
+    // the mismatch above.
     this.vy += Math.sin(this.flapPhase * TWO_PI) * 14 * dt;
 
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    // Heading follows velocity
-    const movDir    = Math.atan2(this.vy, this.vx);
-    const hdDiff    = angleDiff(movDir, this.heading);
-    this.heading   += hdDiff * 5.5 * dt;
-
-    // Bank into turns (feel from Rafael Araujo studies — inner wing dips)
-    const targetBank    = clamp(-hdDiff * 1.3, -32 * DEG, 32 * DEG);
-    this.bankAngle     += (targetBank - this.bankAngle) * 5 * dt;
+    // Bank into turns (feel from Rafael Araujo studies — inner wing dips),
+    // now driven directly by turn rate instead of a second, independently
+    // lagging estimate of heading error.
+    const targetBank    = clamp(-turnStep / maxTurnRate * 32 * DEG, -32 * DEG, 32 * DEG);
+    this.bankAngle     += (targetBank - this.bankAngle) * 6 * dt;
 
     // Pitch with vertical velocity
     const targetPitch   = clamp(-this.vy / 280, -18 * DEG, 18 * DEG);
@@ -409,8 +487,16 @@ export class ButterflyEngine {
     const dy   = p.y - this.y;
     const dist = Math.hypot(dx, dy);
 
-    // Decelerate smoothly
-    const speed  = lerp(85, 16, 1 - Math.min(dist / 90, 1));
+    // Ease-in deceleration: stay brisk through most of the approach and
+    // only bleed speed off sharply right at the end. The old linear decel
+    // (85→16 px/s starting the instant `dist` crossed 90) spent a full
+    // second or more crawling at ~15-20px/s — and with the wings pinned
+    // wide open the whole time (see below), that slow crawl read as
+    // hovering/floating in place rather than flying in, exactly like a
+    // person "walking" without moving their feet.
+    const closeness = 1 - clamp(dist / 90, 0, 1); // 0 = far, 1 = at the perch
+    const eased      = smoothstep(closeness);
+    const speed       = lerp(130, 22, eased);
     if (dist > 1.5) {
       this.vx  = (dx / dist) * speed;
       this.vy  = (dy / dist) * speed;
@@ -422,39 +508,84 @@ export class ButterflyEngine {
     this.bankAngle  *= 1 - 7 * dt;
     this.pitchAngle *= 1 - 5 * dt;
 
-    // Align heading with surface
-    const tgtH   = p.normal + Math.PI / 2;
-    this.heading += angleDiff(tgtH, this.heading) * 4 * dt;
+    // Heading tracks the actual direction of travel (toward the perch)
+    // for almost the whole approach, and only blends into the perch's
+    // final resting angle in the last stretch — a "flare" right before
+    // touchdown, the way a plane levels its wheels only at the very end
+    // of a landing instead of banking to that angle the moment it enters
+    // the approach. The previous version pulled heading toward the
+    // resting angle from the instant landing began, with zero connection
+    // to (dx, dy) — so the drawn orientation and the actual translation
+    // could point in completely different directions for the whole
+    // approach (e.g. still visually facing/rotating toward "up" while
+    // translating toward a perch that's up-and-to-the-right). That
+    // mismatch is exactly what reads as still sliding the old way after
+    // the nose has already turned.
+    const travelHeading = dist > 1.5 ? Math.atan2(dy, dx) : this.heading;
+    const restHeading   = p.normal + Math.PI / 2;
+    const flareFrac      = smoothstep(clamp((closeness - 0.75) / 0.25, 0, 1));
+    const targetHeading  = travelHeading + angleDiff(restHeading, travelHeading) * flareFrac;
 
-    // Wings spread wide on approach (aerodynamic braking)
-    this.flapAngle = lerp(this.flapAngle, 0.04, 10 * dt);
+    // Rate ramps up as it closes in, so heading has already essentially
+    // converged to targetHeading well before touchdown instead of still
+    // correcting a large residual right when the forced snap below fires.
+    const headingRate = lerp(4, 22, eased);
+    this.heading += angleDiff(targetHeading, this.heading) * headingRate * dt;
+
+    // Wings keep actively beating almost the entire way in — the brace
+    // (wide-open, near-static pose used for aerodynamic braking) only
+    // takes over in the last sliver before contact, and even then it's
+    // blended with the ongoing beat rather than replacing it outright, so
+    // there's no stretch where the wings just sit open while the body
+    // keeps sliding in. The old 65%-of-the-approach brace window is what
+    // produced that "still open, still drifting" feeling — real insects
+    // don't glide in stiff-winged for the better part of a second.
+    const braceFrac = smoothstep(clamp((closeness - 0.88) / 0.12, 0, 1)); // 0 until final ~11px, ramps in fast
+    const raw     = Math.sin(this.flapPhase * TWO_PI);
+    const asymm   = raw > 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.35);
+    const flapVal = 0.5 + 0.5 * asymm;
+    const flapTarget = lerp(flapVal, 0.04, braceFrac);
+    this.flapAngle = lerp(this.flapAngle, flapTarget, 14 * dt);
 
     if (dist < 2.5) {
       this.x          = p.x;
       this.y          = p.y;
       this.vx         = 0;
       this.vy         = 0;
+      // Snap heading fully level with the surface at the instant of
+      // touchdown. Perching never corrects heading on its own, so any
+      // leftover misalignment from the approach would otherwise sit there
+      // as a permanently crooked landing — read as a glitch rather than a
+      // clean stop.
+      this.heading    = restHeading;
       this.state      = 'perching';
       this.perchTimer = 1400 + Math.random() * 2000;
       this.flapFreq   = 1.4; // base rate; actual perch fanning is randomized (see updatePerching)
 
-      // Kick off the naturalistic wing-fan cycle: ease from the current
-      // wide-open braking pose into a resting fold over the next
-      // half-second or so, then updatePerching() takes over with random
-      // fan/pause timing.
+      // Kick off the naturalistic wing-fan cycle: ease from wherever the
+      // wings actually were at touchdown (now much closer to folded
+      // already, thanks to the tightened brace window above) into a
+      // resting fold quickly, then updatePerching() takes over with random
+      // fan/pause timing. Shortened from ~0.5-0.8s to ~0.2-0.35s — the
+      // old duration meant the wings stayed visibly spread for the better
+      // part of a second AFTER touchdown too, compounding the "still
+      // drifting" look with a second, separate open-wing stretch.
       this.perchFlapFrom  = this.flapAngle;
       this.perchFanTarget = 0.78 + Math.random() * 0.12;
       this.perchFanT      = 0;
-      this.perchFanDur    = 0.45 + Math.random() * 0.35;
+      this.perchFanDur    = 0.2 + Math.random() * 0.15;
       this.perchFanHold   = 0;
     }
   }
 
   private updatePerching(dt: number) {
     this.perchTimer -= dt * 1000;
-    // Slow lean-out while resting
+    // Slow lean-out while resting. pitchAngle decays smoothly rather than
+    // being hard-set to 0 — a residual few degrees of nose-tilt snapping
+    // to exactly level in a single frame is a small but visible pop right
+    // at the moment it's supposed to be settling, not stopping abruptly.
     this.bankAngle  *= 1 - 8 * dt;
-    this.pitchAngle  = 0;
+    this.pitchAngle *= 1 - 10 * dt;
 
     if (this.perch) {
       if (this.perch.el && !this.perch.el.isConnected) {
@@ -553,7 +684,7 @@ export class ButterflyEngine {
     // Banking skew (3-D lean illusion)
     ctx.transform(1, 0, Math.sin(b.bankAngle) * 0.42, Math.cos(b.bankAngle * 0.55), 0, 0);
 
-    this.drawButterfly(ctx, b.flapAngle, b.scale, b.state === 'perching', b.bankAngle);
+    this.drawButterfly(ctx, b.flapAngle, b.scale, b.groundedness, b.bankAngle);
 
     ctx.restore();
   }
@@ -574,13 +705,29 @@ export class ButterflyEngine {
     ctx: CanvasRenderingContext2D,
     flapAngle: number,   // 0 (open) → 1 (closed)
     scale: number,
-    perching: boolean,
+    groundedness: number, // 0 (airborne) → 1 (perched) — continuous, see field comment
     bankAngle: number,
   ) {
     // S: px per SVG unit (320 units → wingspan in pixels)
     const S  = scale * 0.088; // → ~28 px wingspan @ scale=1
     const cx = 160 * S;       // body centre X
     const cy = 143 * S;       // body centre Y
+
+    // ── Anchor-point fix ─────────────────────────────────────────────────
+    // draw() translates to (b.x, b.y) and rotates around THAT point — (b.x,
+    // b.y) is also the point every physics/navigation calc in this file
+    // treats as "the butterfly". But the raw Bluesky artwork's own visual
+    // centre in its local coordinate space is (cx, cy), not (0, 0) — the
+    // viewBox's origin sits up near a wingtip, not the body. Every draw
+    // call below was positioned relative to that off-centre (cx, cy)
+    // without correcting for it, so the sprite was never actually rotating
+    // around its own body — it was rotating around a point ~15px away,
+    // near one wing root. That's what produced the arcing "swing"/slide on
+    // every heading change, no matter how correct the steering physics
+    // were: a correct rotation around the wrong point still looks wrong.
+    // Shifting the local origin by (-cx, -cy) here makes the body's true
+    // centre coincide with the canvas's actual rotation pivot.
+    ctx.translate(-cx, -cy);
 
     // Wing angle is driven directly by flapAngle, which the engine now
     // computes appropriately for every state — including 'perching', which
@@ -600,26 +747,26 @@ export class ButterflyEngine {
     const forXLeft  = clamp(forX + bankFactor * 0.5, -1, 1);
 
     // ── Drop shadow (ellipse, compressed by wing opening) ──────────────────
-    if (perching) {
-      ctx.save();
-      ctx.translate(cx + 5 * S, cy + 90 * S);
-      ctx.scale(Math.abs(forX) * 1.1, 0.22);
-      ctx.beginPath();
-      ctx.arc(0, 0, 85 * S, 0, TWO_PI);
-      ctx.fillStyle = SHADOW_CLR(0.18);
-      ctx.fill();
-      ctx.restore();
-    } else {
-      // Subtle airborne shadow (fainter, trails slightly below)
-      ctx.save();
-      ctx.translate(cx + 3 * S, cy + 60 * S);
-      ctx.scale(Math.abs(forX) * 0.9, 0.14);
-      ctx.beginPath();
-      ctx.arc(0, 0, 80 * S, 0, TWO_PI);
-      ctx.fillStyle = SHADOW_CLR(0.09);
-      ctx.fill();
-      ctx.restore();
-    }
+    // Blended continuously between the airborne and perched shadow poses
+    // by `groundedness`, instead of hard-switching the instant the state
+    // flips. Interpolating position, squash, radius, and alpha together
+    // is what removes the pop — jumping any single one of those on its
+    // own frame still reads as a flicker.
+    const shOffX   = lerp(3 * S, 5 * S, groundedness);
+    const shOffY   = lerp(60 * S, 90 * S, groundedness);
+    const shScaleX = lerp(0.9, 1.1, groundedness);
+    const shScaleY = lerp(0.14, 0.22, groundedness);
+    const shRadius = lerp(80 * S, 85 * S, groundedness);
+    const shAlpha  = lerp(0.09, 0.18, groundedness);
+
+    ctx.save();
+    ctx.translate(cx + shOffX, cy + shOffY);
+    ctx.scale(Math.abs(forX) * shScaleX, shScaleY);
+    ctx.beginPath();
+    ctx.arc(0, 0, shRadius, 0, TWO_PI);
+    ctx.fillStyle = SHADOW_CLR(shAlpha);
+    ctx.fill();
+    ctx.restore();
 
     // ── Right wing ─────────────────────────────────────────────────────────
     ctx.save();
