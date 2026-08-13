@@ -1056,3 +1056,121 @@ button.primary:disabled {
     padding: 4px 8px;
   }
 }
+
+/* ================================================================ */
+/* Butterfly Scan Button                                             */
+/* ================================================================ */
+
+/*
+ * The scan button gets the Bluesky butterfly mark injected left of the label.
+ * Layout: [butterfly-icon] [label text] — consistent with Bluesky's own UI.
+ */
+
+.scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ── Butterfly mark container ───────────────────────────────────── */
+
+.scan-btn-mark {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.scan-btn-butterfly {
+  width: 16px;
+  height: auto;
+  display: block;
+  /* Inherits currentColor from button — matches text at rest */
+  color: inherit;
+  transition: color 0.25s var(--ease);
+}
+
+/* When idle + enabled: subtle blue tint to hint at Bluesky identity */
+.scan-btn:not(:disabled) .scan-btn-butterfly {
+  color: rgb(10, 122, 255);
+  opacity: 0.82;
+}
+
+/* On hover: full brand blue */
+.scan-btn:hover:not(:disabled) .scan-btn-butterfly {
+  opacity: 1;
+  color: rgb(10, 122, 255);
+}
+
+/* ── Wing-beat keyframe ─────────────────────────────────────────── */
+/*
+ * While scanning, the mark icon does a gentle "breathing" scale pulse
+ * that echoes the physics of a real wing beat: quick compress → slow expand.
+ * The full cinematic butterfly lives on the canvas; this is just a heartbeat
+ * indicator in the button itself.
+ */
+
+@keyframes butterfly-wingbeat {
+  0%   { transform: scaleX(1)    scaleY(1);    opacity: 0.90; }
+  20%  { transform: scaleX(0.55) scaleY(0.90); opacity: 1;    }  /* wings closing */
+  38%  { transform: scaleX(0.15) scaleY(0.82); opacity: 0.95; }  /* edge-on */
+  55%  { transform: scaleX(0.55) scaleY(0.90); opacity: 1;    }  /* opening */
+  80%  { transform: scaleX(1)    scaleY(1);    opacity: 0.88; }  /* fully open */
+  100% { transform: scaleX(1)    scaleY(1);    opacity: 0.90; }
+}
+
+@keyframes butterfly-glow {
+  0%, 100% { filter: drop-shadow(0 0 0px rgba(10,122,255,0));    }
+  40%       { filter: drop-shadow(0 0 6px rgba(10,122,255,0.55)); }
+}
+
+.scan-btn-mark--alive .scan-btn-butterfly {
+  color: rgb(10, 122, 255) !important;
+  opacity: 1 !important;
+  animation:
+    butterfly-wingbeat 0.95s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+    butterfly-glow     0.95s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+/* ── Scanning state: button keeps its active style but doesn't darken ── */
+
+.scan-btn--scanning {
+  background: var(--accent-dim);
+  border-color: rgba(10, 122, 255, 0.35) !important;
+  color: var(--text) !important;
+  cursor: default;
+  letter-spacing: 0.22em;
+}
+
+.scan-btn--scanning:hover {
+  /* override the normal hover expansion while scanning */
+  letter-spacing: 0.22em !important;
+  background: var(--accent-dim) !important;
+}
+
+/* ── Label ─────────────────────────────────────────────────────── */
+
+.scan-btn-label {
+  /* Prevents label width change from shifting button size during state change */
+  display: inline-block;
+  min-width: 4.2ch;
+  text-align: center;
+}
+
+/* ── RTL mirror ────────────────────────────────────────────────── */
+
+[dir='rtl'] .scan-btn {
+  flex-direction: row-reverse;
+}
+
+/* ================================================================ */
+/* Canvas overlay (set by useButterfly, documented here for clarity)*/
+/* ================================================================ */
+
+/*
+ * #butterfly-canvas is injected by useButterfly.ts as:
+ *   position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+ * No CSS needed here — it's fully controlled in JS for sizing accuracy.
+ * This comment is intentional documentation for future maintainers.
+ */

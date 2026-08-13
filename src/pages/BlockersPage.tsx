@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { BlockScanner, DEFAULT_NETWORK_OPTIONS } from '../services/BlockScanner';
 import { ScanPanel } from '../components/ScanPanel';
+import { ScanButton } from '../components/ScanButton';
 import { ResultCard } from '../components/ResultCard';
 import { useLanguage } from '../i18n/LanguageContext';
 import { formatNumber, formatScaleLabel, localizeErrorMessage } from '../i18n/format';
+import { useButterfly } from '../components/butterfly/useButterfly';
 import type { CandidateResult, NetworkOptions, ScanProgress, SkipMetric } from '../types';
 
 type Status = 'idle' | 'scanning' | 'done' | 'error';
@@ -21,6 +23,9 @@ export function BlockersPage() {
     String(DEFAULT_NETWORK_OPTIONS.skipLargeAccounts.maxCount)
   );
   const scannerRef = useRef(new BlockScanner());
+
+  // Butterfly animation
+  const { startButterfly, stopButterfly } = useButterfly();
 
   const SKIP_METRIC_LABELS: Record<SkipMetric, string> = {
     followers: dict.blockers.followers,
@@ -64,10 +69,6 @@ export function BlockersPage() {
     setSkipCountInput(String(clean));
   }, []);
 
-  // The skip-count number field is backed by its own string state so the user can
-  // freely clear it and type a new value without a stale leading "0" sticking around
-  // (a plain `value={someNumber}` controlled input re-inserts "0" before new digits
-  // whenever the field is momentarily empty).
   const handleSkipCountInputChange = useCallback((raw: string) => {
     const digitsOnly = raw.replace(/[^0-9]/g, '');
     const normalized = digitsOnly.replace(/^0+(?=\d)/, '');
@@ -110,11 +111,12 @@ export function BlockersPage() {
     setErrorMessage(null);
     setResults([]);
 
+    // 🦋 Launch butterfly
+    startButterfly();
+
     try {
       const scanResults = await scannerRef.current.scan(cleaned, networkOptions, (p) => {
         setProgress(p);
-        // Blocks get checked in parallel as the scan goes, so stream each snapshot
-        // straight into state instead of waiting for the whole scan to finish.
         if (p.results) setResults([...p.results]);
       });
       setResults(scanResults);
@@ -123,8 +125,11 @@ export function BlockersPage() {
       const raw = err instanceof Error ? err.message : dict.common.scanErrorFallback;
       setErrorMessage(localizeErrorMessage(raw, lang));
       setStatus('error');
+    } finally {
+      // 🦋 Butterfly exits gracefully
+      stopButterfly();
     }
-  }, [handle, networkOptions, lang, dict]);
+  }, [handle, networkOptions, lang, dict, startButterfly, stopButterfly]);
 
   const blockedResults = results.filter((r) => r.hasBlockedYou);
   const isScanning = status === 'scanning';
@@ -254,9 +259,13 @@ export function BlockersPage() {
             disabled={isScanning}
           />
         </div>
-        <button className="primary" onClick={runScan} disabled={isScanning || !handle.trim() || !hasAnyOption}>
-          {isScanning ? dict.blockers.scanning : dict.blockers.scan}
-        </button>
+        <ScanButton
+          isScanning={isScanning}
+          disabled={isScanning || !handle.trim() || !hasAnyOption}
+          label={dict.blockers.scan}
+          scanningLabel={dict.blockers.scanning}
+          onClick={runScan}
+        />
       </div>
       <div className="hint">{dict.common.noLogin}</div>
 
