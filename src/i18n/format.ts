@@ -49,22 +49,30 @@ export function localizeErrorMessage(message: string, lang: Lang): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [
       /^Could not resolve "(.+)" \(HTTP (\d+)\)\. Check the handle is correct\.$/,
-      (m) => `شناسایی «${m[1]}» ممکن نشد (HTTP ${formatNumber(Number(m[2]), 'fa')}). درستی نام کاربری را بررسی کنید.`,
+      (m) => `شناسایی «${m[1]}» فیل شد (HTTP ${formatNumber(Number(m[2]), 'fa')}). درست بودن هندل رو چک کن.`,
     ],
     [
       /^Could not read block records for this account \(HTTP (\d+)\)\.$/,
-      (m) => `خواندن سوابق مسدودی این حساب ممکن نشد (HTTP ${formatNumber(Number(m[1]), 'fa')}).`,
+      (m) => `خوندن بلاک‌رکوردهای این اکانت فیل شد (HTTP ${formatNumber(Number(m[1]), 'fa')}).`,
     ],
     [
       /^Could not resolve DID document for (.+)$/,
-      (m) => `شناسایی سند DID برای ${m[1]} ممکن نشد.`,
+      (m) => `شناسایی DID document برای ${m[1]} فیل شد.`,
     ],
     [
       /^Could not resolve did:web document for (.+)$/,
-      (m) => `شناسایی سند did:web برای ${m[1]} ممکن نشد.`,
+      (m) => `شناسایی did:web document برای ${m[1]} فیل شد.`,
     ],
-    [/^Unsupported DID method: (.+)$/, (m) => `روش DID پشتیبانی‌نشده: ${m[1]}`],
-    [/^No PDS service endpoint found for (.+)$/, (m) => `هیچ نقطهٔ پایانی PDS برای ${m[1]} یافت نشد.`],
+    [/^Unsupported DID method: (.+)$/, (m) => `این متد DID پشتیبانی نمی‌شه: ${m[1]}`],
+    [/^No PDS service endpoint found for (.+)$/, (m) => `هیچ PDS endpoint‌ای برای ${m[1]} پیدا نشد.`],
+    [
+      /^Could not read the feed for "(.+)" \(HTTP (\d+)\)\.$/,
+      (m) => `فچ کردن فید «${m[1]}» فیل شد (HTTP ${formatNumber(Number(m[2]), 'fa')}).`,
+    ],
+    [
+      /^Could not read "(.+)" records for this account \(HTTP (\d+)\)\.$/,
+      (m) => `خوندن کالکشن «${m[1]}» این اکانت فیل شد (HTTP ${formatNumber(Number(m[2]), 'fa')}).`,
+    ],
   ];
 
   for (const [pattern, build] of rules) {
