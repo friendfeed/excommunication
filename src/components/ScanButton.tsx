@@ -5,15 +5,16 @@
  *
  * States:
  *   idle     — butterfly mark + "SCAN" label, normal accent style
- *   scanning — butterfly pulses gently, label changes to scanning text,
- *              the full-viewport animation has already been started by the
- *              parent via useButterfly()
+ *   scanning — the button's butterfly mark fades out (see
+ *              .scan-btn-mark--handoff in styles.css) right as the
+ *              full-viewport ButterflyEngine spawns at this exact spot, so
+ *              it reads as one butterfly launching off the button rather
+ *              than a second one appearing alongside it. Started by the
+ *              parent via useButterfly().
  *   disabled — faded, cursor-not-allowed
  *
  * The butterfly SVG is the official path from the Bluesky social-app repo.
  */
-
-import type { CSSProperties } from 'react';
 
 interface ScanButtonProps {
   isScanning: boolean;
@@ -40,14 +41,13 @@ export function ScanButton({
     >
       {/* Official Bluesky butterfly mark */}
       <span
-        className={`scan-btn-mark ${isScanning ? 'scan-btn-mark--alive' : ''}`}
+        className={`scan-btn-mark ${isScanning ? 'scan-btn-mark--handoff' : ''}`}
         aria-hidden="true"
       >
         <svg
           viewBox="0 0 320 286"
           xmlns="http://www.w3.org/2000/svg"
           className="scan-btn-butterfly"
-          style={isScanning ? ({ '--flap': '1' } as CSSProperties) : undefined}
         >
           <path
             d="M69.364 19.146c36.687 27.806 76.147 84.186 90.636 114.439

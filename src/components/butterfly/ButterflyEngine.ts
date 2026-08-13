@@ -39,6 +39,13 @@ export interface Perch {
   y: number;
   /** Surface normal direction (radians). −π/2 = horizontal top surface */
   normal: number;
+  /** Source DOM element, kept so we can re-derive x/y live every frame
+   *  instead of relying on a one-time snapshot (see refreshPerch). */
+  el?: HTMLElement;
+  /** Horizontal position along the element's width (0–1), preserved so a
+   *  live re-derivation lands on the same relative spot even if the
+   *  element's size changes (responsive layout, etc). */
+  fracX?: number;
 }
 
 export interface ButterflyEngineOptions {
@@ -76,6 +83,14 @@ export class ButterflyEngine {
   private perchTimer   = 0;
   private takeoffTimer = 0;
   private glideTimer   = 0;
+  private harvestTimer = 0;
+
+  // Perch wing-fan animation (naturalistic, randomized — see updatePerching)
+  private perchFlapFrom   = 0.75;
+  private perchFanTarget  = 0.75;
+  private perchFanT       = 0;
+  private perchFanDur     = 1;
+  private perchFanHold    = 0;
 
   // Navigation
   private targetX = 0;
@@ -192,16 +207,17 @@ export class ButterflyEngine {
         const steps = Math.min(4, Math.floor(r.width / 80));
         for (let i = 0; i <= steps; i++) {
           const frac = steps === 0 ? 0.5 : i / steps;
-          const px = left + r.width * (0.1 + frac * 0.8);
+          const fracX = 0.1 + frac * 0.8;
+          const px = left + r.width * fracX;
           // only add if on canvas (compare against logical CSS-pixel size,
           // not this.canvas.width which is in device pixels)
           if (px > 0 && px < this.cssW && top > 20 && top < this.cssH - 20) {
-            list.push({ x: px, y: top, normal: -Math.PI / 2 });
+            list.push({ x: px, y: top, normal: -Math.PI / 2, el, fracX });
           }
         }
         // Bottom edge occasionally
         if (bottom > 20 && bottom < this.cssH - 20) {
-          list.push({ x: left + r.width * 0.5, y: bottom, normal: Math.PI / 2 });
+          list.push({ x: left + r.width * 0.5, y: bottom, normal: Math.PI / 2, el, fracX: 0.5 });
         }
         void right;
       }
@@ -226,6 +242,7 @@ export class ButterflyEngine {
 
     if (wantPerch) {
       const p = this.perches[Math.floor(Math.random() * this.perches.length)];
+      this.refreshPerch(p); // start from its live position, not a stale snapshot
       this.targetX = p.x;
       this.targetY = p.y;
       this.perch   = p;
@@ -234,6 +251,28 @@ export class ButterflyEngine {
       this.targetY = clamp(this.y + (Math.random() - 0.5)  * H * 0.42, 50, H - 50);
       this.perch   = null;
     }
+  }
+
+  /**
+   * Re-derive a perch's on-canvas x/y from its live source element instead
+   * of the coordinates captured when it was harvested. Perch coordinates
+   * are a one-time getBoundingClientRect() snapshot; if the page scrolls,
+   * resizes, or the layout shifts after that snapshot — which happens
+   * constantly, since results stream in during a scan — a butterfly that
+   * flew to (or landed on) the stale coordinates visibly detaches from the
+   * element it's supposed to be resting on ("floats in space"). Calling
+   * this every frame while a perch is targeted or occupied keeps it glued
+   * to the real element.
+   */
+  private refreshPerch(p: Perch) {
+    if (!p.el || !p.el.isConnected) return;
+    const cr = this.canvas.getBoundingClientRect();
+    const r  = p.el.getBoundingClientRect();
+    const fracX = p.fracX ?? 0.5;
+    p.x = r.left - cr.left + r.width * fracX;
+    p.y = p.normal < 0
+      ? r.top - cr.top             // top-edge perch
+      : r.top - cr.top + r.height; // bottom-edge perch
   }
 
   // ── Main loop ───────────────────────────────────────────────────────────────
@@ -250,19 +289,32 @@ export class ButterflyEngine {
   // ── Physics ─────────────────────────────────────────────────────────────────
 
   private update(dt: number) {
+    // Periodically re-scan the DOM for perch candidates. Perches were only
+    // ever harvested once at start()/resize(), so elements that appear or
+    // disappear afterward (e.g. .result-card rows streaming in during a
+    // scan) were invisible to the engine — and a perch on a since-removed
+    // element is part of what made a "resting" butterfly look stranded.
+    this.harvestTimer += dt;
+    if (this.harvestTimer > 4) {
+      this.harvestTimer = 0;
+      this.harvestPerches();
+    }
+
     // Wing-beat phase always advances so the cycle stays continuous
     // across state changes.
     this.flapPhase = (this.flapPhase + this.flapFreq * dt) % 1;
 
     // The continuous wing-beat sine curve drives flapAngle in every state
-    // EXCEPT 'landing'. Previously it was applied unconditionally, which
-    // meant updateLanding()'s smooth lerp toward a wide-open brace (0.04)
-    // got overwritten by this sine value at the start of every single
-    // frame, then only nudged 10–20% back toward the target before being
-    // overwritten again next frame — a fight that showed up as jittery,
-    // flickering wings on approach instead of a smooth spread. Landing now
-    // owns flapAngle exclusively.
-    if (this.state !== 'landing') {
+    // EXCEPT 'landing' and 'perching'. Previously it was applied
+    // unconditionally, which meant updateLanding()'s smooth lerp toward a
+    // wide-open brace (0.04) got overwritten by this sine value at the
+    // start of every single frame, then only nudged 10–20% back toward the
+    // target before being overwritten again next frame — a fight that
+    // showed up as jittery, flickering wings on approach instead of a
+    // smooth spread. 'perching' has its own randomized, naturalistic fan
+    // cycle (see updatePerching) instead of the regular flight wing-beat.
+    // Both states now own flapAngle exclusively.
+    if (this.state !== 'landing' && this.state !== 'perching') {
       // Asymmetric sine: quicker downstroke, slower upstroke
       const raw      = Math.sin(this.flapPhase * TWO_PI);
       const asymm    = raw > 0 ? Math.pow(raw, 0.7) : -Math.pow(-raw, 1.35);
@@ -278,6 +330,16 @@ export class ButterflyEngine {
   }
 
   private updateFlying(dt: number) {
+    // If we're beelining for a perch, keep re-deriving the target from the
+    // live element every frame rather than the coordinates captured when
+    // it was picked — otherwise a scroll or layout shift mid-flight sends
+    // the butterfly toward a point that's no longer where the element is.
+    if (this.perch) {
+      this.refreshPerch(this.perch);
+      this.targetX = this.perch.x;
+      this.targetY = this.perch.y;
+    }
+
     const dx   = this.targetX - this.x;
     const dy   = this.targetY - this.y;
     const dist = Math.hypot(dx, dy);
@@ -337,7 +399,12 @@ export class ButterflyEngine {
   }
 
   private updateLanding(dt: number) {
-    const p    = this.perch!;
+    const p = this.perch!;
+    // Keep tracking the element's live position all the way to touchdown
+    // — without this, an approach that spans a scroll/resize event lands
+    // on stale coordinates and the butterfly settles beside/above the
+    // element instead of on it.
+    this.refreshPerch(p);
     const dx   = p.x - this.x;
     const dy   = p.y - this.y;
     const dist = Math.hypot(dx, dy);
@@ -369,15 +436,70 @@ export class ButterflyEngine {
       this.vy         = 0;
       this.state      = 'perching';
       this.perchTimer = 1400 + Math.random() * 2000;
-      this.flapFreq   = 1.4; // gentle wing-fanning while perched
+      this.flapFreq   = 1.4; // base rate; actual perch fanning is randomized (see updatePerching)
+
+      // Kick off the naturalistic wing-fan cycle: ease from the current
+      // wide-open braking pose into a resting fold over the next
+      // half-second or so, then updatePerching() takes over with random
+      // fan/pause timing.
+      this.perchFlapFrom  = this.flapAngle;
+      this.perchFanTarget = 0.78 + Math.random() * 0.12;
+      this.perchFanT      = 0;
+      this.perchFanDur    = 0.45 + Math.random() * 0.35;
+      this.perchFanHold   = 0;
     }
   }
 
   private updatePerching(dt: number) {
     this.perchTimer -= dt * 1000;
-    // Slow fanning while resting
+    // Slow lean-out while resting
     this.bankAngle  *= 1 - 8 * dt;
     this.pitchAngle  = 0;
+
+    if (this.perch) {
+      if (this.perch.el && !this.perch.el.isConnected) {
+        // The element we're standing on disappeared from the page (e.g. a
+        // result card removed on re-render) — don't linger floating on
+        // nothing, cut the visit short instead.
+        this.perchTimer = Math.min(this.perchTimer, 200);
+      } else {
+        // Stay glued to the live element every frame. Without this the
+        // butterfly holds the pixel coordinates from the moment it landed,
+        // so as soon as the page scrolls or the layout reflows it visibly
+        // detaches — appearing to "float in space" while the real element
+        // moves out from under it.
+        this.refreshPerch(this.perch);
+        this.x = this.perch.x;
+        this.y = this.perch.y;
+      }
+    }
+
+    // Naturalistic wing fanning: real butterflies at rest don't flap on a
+    // metronome — they hold mostly-folded, then ease through an occasional
+    // fan at a random moment and random speed, then pause again. Ease
+    // between a "hold" target and a freshly-rolled random target using a
+    // smoothstep curve so each motion is smooth, not linear/robotic.
+    if (this.perchFanHold > 0) {
+      this.perchFanHold -= dt;
+    } else {
+      this.perchFanT += dt / this.perchFanDur;
+      if (this.perchFanT >= 1) {
+        this.perchFanT = 0;
+        this.perchFlapFrom = this.perchFanTarget;
+
+        // Occasionally a fuller, slower open (a proper fan); mostly small
+        // settling adjustments around a mostly-closed rest pose.
+        const bigFan = Math.random() < 0.3;
+        this.perchFanTarget = bigFan
+          ? 0.12 + Math.random() * 0.25   // wings open wide
+          : 0.62 + Math.random() * 0.28;  // mostly folded, slight variation
+
+        this.perchFanDur  = bigFan ? 0.6 + Math.random() * 0.7 : 0.35 + Math.random() * 0.5;
+        this.perchFanHold = bigFan ? 0.3 + Math.random() * 1.2 : 0.6 + Math.random() * 2.6;
+      }
+    }
+    const eased = smoothstep(clamp(this.perchFanT, 0, 1));
+    this.flapAngle = lerp(this.perchFlapFrom, this.perchFanTarget, eased);
 
     if (this.perchTimer <= 0) {
       this.state      = 'taking-off';
@@ -460,9 +582,13 @@ export class ButterflyEngine {
     const cx = 160 * S;       // body centre X
     const cy = 143 * S;       // body centre Y
 
-    // When perched: wings held at ~68° (fan-like, as seen in the refs)
-    const effectiveFlap = perching ? 0.70 : flapAngle;
-    const wingAngle     = effectiveFlap * 138 * DEG; // 0 → 138°
+    // Wing angle is driven directly by flapAngle, which the engine now
+    // computes appropriately for every state — including 'perching', which
+    // runs its own randomized, naturalistic fan cycle (see updatePerching)
+    // instead of being hard-pinned to a single constant angle here. That
+    // pin used to make a "resting" butterfly render with completely static
+    // wings no matter what updatePerching computed.
+    const wingAngle = flapAngle * 138 * DEG; // 0 → 138°
 
     // Foreshortening factor per wing
     const forX = Math.cos(wingAngle);
@@ -506,7 +632,7 @@ export class ButterflyEngine {
     ctx.beginPath();
     ctx.rect(cx, -10 * S, 200 * S, 310 * S);
     ctx.clip();
-    this.fillWing(ctx, S, cx, cy, effectiveFlap, 'right');
+    this.fillWing(ctx, S, cx, cy, flapAngle, 'right');
     ctx.restore();
 
     ctx.restore();
@@ -521,7 +647,7 @@ export class ButterflyEngine {
     ctx.beginPath();
     ctx.rect(cx, -10 * S, 200 * S, 310 * S);
     ctx.clip();
-    this.fillWing(ctx, S, cx, cy, effectiveFlap, 'left');
+    this.fillWing(ctx, S, cx, cy, flapAngle, 'left');
     ctx.restore();
 
     ctx.restore();
@@ -628,6 +754,13 @@ function clamp(v: number, lo: number, hi: number) {
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * clamp(t, 0, 1);
+}
+
+/** Ease-in/ease-out curve (0→1) — used for the perch wing-fan motion so
+ *  it accelerates smoothly into and out of each pose instead of moving at
+ *  a constant linear rate. */
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
 }
 
 function angleDiff(target: number, current: number): number {
