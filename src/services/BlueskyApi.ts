@@ -86,6 +86,156 @@ export class BlueskyApi {
     return out;
   }
 
+  /**
+   * Fetches a single page of an account's public feed (their own posts and
+   * reposts), newest first. Used to build the cross-account timeline view.
+   */
+  public async getAuthorFeed(
+    actor: string,
+    limit = 20,
+    cursor?: string
+  ): Promise<{
+    items: {
+      uri: string;
+      author: { did: string; handle: string; displayName?: string; avatar?: string };
+      text: string;
+      createdAt: string;
+      indexedAt: string;
+      likeCount?: number;
+      repostCount?: number;
+      replyCount?: number;
+      images?: { thumb: string; alt?: string }[];
+      isRepost?: boolean;
+      isReply?: boolean;
+      isQuote?: boolean;
+      repostBy?: { did: string; handle: string; displayName?: string; avatar?: string };
+    }[];
+    cursor?: string;
+  }> {
+    const url = new URL(`${BlueskyApi.BASE}/app.bsky.feed.getAuthorFeed`);
+    url.searchParams.set('actor', actor);
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('filter', 'posts_with_replies');
+    if (cursor) url.searchParams.set('cursor', cursor);
+
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      throw new Error(`Could not read the feed for "${actor}" (HTTP ${res.status}).`);
+    }
+    const data = await res.json();
+    const rawItems = (data.feed ?? []) as any[];
+
+    const items = rawItems
+      .filter((item) => item?.post)
+      .map((item) => {
+        const post = item.post;
+        const record = post.record ?? {};
+        const images =
+          (post.embed?.images ?? post.embed?.media?.images ?? [])?.map((img: any) => ({
+            thumb: img.thumb,
+            alt: img.alt,
+          })) ?? undefined;
+        const reason = item.reason;
+        const isRepost = reason?.$type === 'app.bsky.feed.defs#reasonRepost';
+        const embedType = post.embed?.$type ?? record.embed?.$type ?? '';
+        const isQuote =
+          embedType === 'app.bsky.embed.record#view' || embedType === 'app.bsky.embed.recordWithMedia#view';
+        const isReply = !!record.reply;
+
+        return {
+          uri: post.uri,
+          author: {
+            did: post.author?.did,
+            handle: post.author?.handle,
+            displayName: post.author?.displayName,
+            avatar: post.author?.avatar,
+          },
+          text: record.text ?? '',
+          createdAt: record.createdAt ?? post.indexedAt,
+          indexedAt: post.indexedAt,
+          likeCount: post.likeCount,
+          repostCount: post.repostCount,
+          replyCount: post.replyCount,
+          images: images && images.length > 0 ? images : undefined,
+          isRepost,
+          isReply,
+          isQuote,
+          repostBy: isRepost
+            ? {
+                did: reason?.by?.did,
+                handle: reason?.by?.handle,
+                displayName: reason?.by?.displayName,
+                avatar: reason?.by?.avatar,
+              }
+            : undefined,
+        };
+      });
+
+    return { items, cursor: data.cursor };
+  }
+
+  /** Batch-resolves up to 25 post URIs at a time into full post views. Used to display liked posts. */
+  public async getPosts(uris: string[]): Promise<
+    Map<
+      string,
+      {
+        uri: string;
+        author: { did: string; handle: string; displayName?: string; avatar?: string };
+        text: string;
+        createdAt: string;
+        indexedAt: string;
+        likeCount?: number;
+        repostCount?: number;
+        replyCount?: number;
+        images?: { thumb: string; alt?: string }[];
+      }
+    >
+  > {
+    const out = new Map<string, any>();
+    const chunkSize = 25;
+
+    for (let i = 0; i < uris.length; i += chunkSize) {
+      const chunk = uris.slice(i, i + chunkSize);
+      const url = new URL(`${BlueskyApi.BASE}/app.bsky.feed.getPosts`);
+      for (const uri of chunk) url.searchParams.append('uris', uri);
+
+      try {
+        const res = await fetch(url.toString());
+        if (!res.ok) continue;
+        const data = await res.json();
+        const posts = (data.posts ?? []) as any[];
+        for (const post of posts) {
+          const record = post.record ?? {};
+          const images =
+            (post.embed?.images ?? post.embed?.media?.images ?? [])?.map((img: any) => ({
+              thumb: img.thumb,
+              alt: img.alt,
+            })) ?? undefined;
+          out.set(post.uri, {
+            uri: post.uri,
+            author: {
+              did: post.author?.did,
+              handle: post.author?.handle,
+              displayName: post.author?.displayName,
+              avatar: post.author?.avatar,
+            },
+            text: record.text ?? '',
+            createdAt: record.createdAt ?? post.indexedAt,
+            indexedAt: post.indexedAt,
+            likeCount: post.likeCount,
+            repostCount: post.repostCount,
+            replyCount: post.replyCount,
+            images: images && images.length > 0 ? images : undefined,
+          });
+        }
+      } catch {
+        // A failed chunk just means those posts stay unresolved.
+      }
+    }
+
+    return out;
+  }
+
   /** Returns every account `actor` follows. */
   public async getAllFollows(actor: string, onPage?: (count: number) => void): Promise<ActorProfile[]> {
     return this.paginate(actor, 'app.bsky.graph.getFollows', 'follows', onPage);

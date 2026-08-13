@@ -6,6 +6,7 @@ import { ResultCard } from '../components/ResultCard';
 import { useLanguage } from '../i18n/LanguageContext';
 import { formatNumber, formatScaleLabel, localizeErrorMessage } from '../i18n/format';
 import { useButterfly } from '../components/butterfly/useButterfly';
+import { exportAccountList } from '../services/ExportImport';
 import type { CandidateResult, NetworkOptions, ScanProgress, SkipMetric } from '../types';
 
 type Status = 'idle' | 'scanning' | 'done' | 'error';
@@ -133,6 +134,21 @@ export function BlockersPage() {
 
   const blockedResults = results.filter((r) => r.hasBlockedYou);
   const isScanning = status === 'scanning';
+
+  const downloadResults = useCallback(() => {
+    const cleaned = handle.trim().replace(/^@/, '');
+    exportAccountList(
+      'blockers',
+      cleaned,
+      blockedResults.map((r) => ({
+        did: r.candidate.did,
+        handle: r.candidate.handle,
+        displayName: r.candidate.displayName,
+        avatar: r.candidate.avatar,
+        blockedAt: r.blockDate,
+      }))
+    );
+  }, [handle, blockedResults]);
   const hasAnyOption =
     depth1Active ||
     networkOptions.depth2.followers ||
@@ -284,6 +300,11 @@ export function BlockersPage() {
                 ? t('blockers.outOfChecked', { total: formatNumber(results.length, lang) })
                 : dict.blockers.soFar}
             </span>
+            {status === 'done' && blockedResults.length > 0 && (
+              <button type="button" className="secondary download-btn" onClick={downloadResults}>
+                {dict.common.downloadJson}
+              </button>
+            )}
           </div>
 
           {blockedResults.length === 0 ? (

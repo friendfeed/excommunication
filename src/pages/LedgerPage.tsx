@@ -4,6 +4,7 @@ import { LedgerPanel } from '../components/LedgerPanel';
 import { BlockedAccountRow } from '../components/BlockedAccountRow';
 import { useLanguage } from '../i18n/LanguageContext';
 import { formatNumber, localizeErrorMessage } from '../i18n/format';
+import { exportAccountList } from '../services/ExportImport';
 import type { BlockedAccountEntry, LedgerProgress } from '../types';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
@@ -39,6 +40,20 @@ export function LedgerPage() {
   }, [handle, lang, dict]);
 
   const isLoading = status === 'loading';
+
+  const downloadEntries = useCallback(() => {
+    exportAccountList(
+      'ledger',
+      resolvedHandle,
+      entries.map((e) => ({
+        did: e.actor.did,
+        handle: e.actor.handle,
+        displayName: e.actor.displayName,
+        avatar: e.actor.avatar,
+        blockedAt: e.blockedAt,
+      }))
+    );
+  }, [resolvedHandle, entries]);
 
   return (
     <>
@@ -78,6 +93,11 @@ export function LedgerPage() {
                 handle: resolvedHandle,
               })}
             </span>
+            {entries.length > 0 && (
+              <button type="button" className="secondary download-btn" onClick={downloadEntries}>
+                {dict.common.downloadJson}
+              </button>
+            )}
           </div>
 
           {entries.length === 0 ? (

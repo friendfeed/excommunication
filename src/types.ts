@@ -70,7 +70,7 @@ export interface ScanProgress {
 export type ProgressCallback = (progress: ScanProgress) => void;
 
 /** Which page of the site is currently shown. */
-export type Page = 'blockers' | 'ledger';
+export type Page = 'blockers' | 'ledger' | 'timeline' | 'focus';
 
 /** One account found in another account's block list. */
 export interface BlockedAccountEntry {
@@ -89,3 +89,64 @@ export interface LedgerProgress {
 }
 
 export type LedgerProgressCallback = (progress: LedgerProgress) => void;
+
+/** Portable JSON shape used for both downloading and re-uploading account lists. */
+export interface ExportedAccount {
+  did: string;
+  handle: string;
+  displayName?: string;
+  avatar?: string;
+  blockedAt?: string;
+}
+
+export interface ExportedAccountList {
+  /** Which page produced this file. */
+  source: 'blockers' | 'ledger' | 'timeline';
+  /** The handle the list is about (the scanned account, or the reference account). */
+  target: string;
+  generatedAt: string;
+  accounts: ExportedAccount[];
+}
+
+/** A single post pulled from an account's public feed, for the timeline page. */
+export interface TimelinePost {
+  uri: string;
+  author: ActorProfile;
+  text: string;
+  createdAt: string;
+  indexedAt: string;
+  likeCount?: number;
+  repostCount?: number;
+  replyCount?: number;
+  images?: { thumb: string; alt?: string }[];
+  isRepost?: boolean;
+  repostBy?: ActorProfile;
+  /** Set when this post is itself a reply to something else. */
+  isReply?: boolean;
+  /** Set when this post quotes another post. */
+  isQuote?: boolean;
+  /** Set (Focus mode only) when this item is a like the focused account made on someone else's post. */
+  likedBy?: ActorProfile;
+}
+
+export interface TimelineProgress {
+  phase: 'resolving' | 'fetching' | 'done' | 'error';
+  message: string;
+  current?: number;
+  total?: number;
+  posts?: TimelinePost[];
+}
+
+export type TimelineProgressCallback = (progress: TimelineProgress) => void;
+
+/** The three interaction categories shown in Focus mode. */
+export type FocusKind = 'replies' | 'quotes' | 'likes';
+
+export interface FocusSectionState {
+  items: TimelinePost[];
+  cursor?: string;
+  loading: boolean;
+  /** Set once a fetch attempt fails outright (e.g. likes aren't readable for this account). */
+  unavailable?: boolean;
+  exhausted: boolean;
+}
